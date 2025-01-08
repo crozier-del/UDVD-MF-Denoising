@@ -1,0 +1,234 @@
+import argparse  # Importing argparse for command-line argument parsing
+import logging  # Importing logging for logging messages
+from signal import valid_signals  # Importing valid_signals from signal module
+from PIL import Image  # Importing Image from PIL (Python Imaging Library)
+
+import numpy as np  # Importing numpy for numerical operations
+from skimage import io  # Importing io from skimage for image input/output
+
+import torch  # Importing torch for deep learning functionalities
+import torch.nn as nn  # Importing nn from torch for neural network layers
+import torch.nn.functional as F  # Importing F from torch for functional operations
+from torchvision.transforms import ToTensor  # Importing ToTensor from torchvision for image transformations
+import tifffile  # Importing tifffile for TIFF file input/output
+import random  # Importing random for generating random numbers
+
+import data, utils, models  # Importing custom modules for data handling, utilities, and models
+import warnings  # Importing warnings to handle warnings during execution
+warnings.filterwarnings("ignore")  # Ignoring warnings during execution
+
+device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')  # Checking if CUDA is available and setting device accordingly
+
+def load_model(lr = 1e-4):  # Defining a function to load the model with a default learning rate
+    args = argparse.Namespace(model='blind-video-net-4',  # Setting model name and parameters using argparse
+                              channels=1, 
+                              out_channels=1, 
+                              bias=False, 
+                              normal=False, 
+                              blind_noise=False)
+    
+    model = models.build_model(args).to(device)  # Building the model based on the specified parameters and moving it to the device
+    
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)  # Defining Adam optimizer with the specified learning rate
+        
+    return model, optimizer  # Returning the model and optimizer
+
+def read_image(path):  # Defining a function to read an image from the specified path
+    image = Image.open(path)  # Opening the image using PIL
+    image = ToTensor()(image)  # Converting the image to a PyTorch tensor using ToTensor()
+    return image  # Returning the image tensor
+
+class DataSet(torch.utils.data.Dataset):  # Defining a custom dataset class for handling data
+    def __init__(self, filename,image_size = None, transforms = False):  # Initializing the dataset with optional arguments
+        super().__init__()  # Calling the superclass constructor
+        self.x = image_size  # Setting image_size attribute
+        self.img = io.imread(filename)  # Reading the image file using skimage's io.imread()
+        self.transforms = transforms  # Setting transforms attribute
+
+    def __len__(self):  # Defining method to get the length of the dataset
+        return self.img.shape[0]  # Returning the number of samples in the dataset
+
+    def __getitem__(self, index):  # Defining method to get a specific item from the dataset
+        if index < 2:
+            out = np.concatenate((np.repeat(np.array([self.img[0]]), 2, axis=0), self.img[index:index+3]), axis=0)
+        elif index > self.img.shape[0]-3:
+            out = np.concatenate((self.img[index-2:index+1], np.repeat(np.array([self.img[-1]]), 2, axis=0)), axis=0)
+        else:
+            out = self.img[index-2:index+3]
+
+        H, W = out.shape[-2:]  # Getting height and width of the output
+        
+        if self.x is not None:  # Checking if image_size is specified
+            h = np.random.randint(0, H-self.x)  # Generating a random integer for height
+            w = np.random.randint(0, W-self.x)  # Generating a random integer for width
+            out = out[:, h:h+self.x, w:w+self.x]  # Cropping the output based on the random values
+        
+        if self.transforms:  # Checking if transformations are enabled
+            invert = random.choice([0, 1, 2])  # Randomly choosing an invert value
+            if invert == 1:
+                out = out[:, :, ::-1]  # Inverting horizontally
+            elif invert == 2:
+                out = out[:, ::-1, :]  # Inverting vertically
+
+            rotate = random.choice([0, 1, 2, 3])  # Randomly choosing a rotation value
+            if rotate != 0:
+                out = np.rot90(out, rotate, (1, 2))  # Rotating the output
+        
+        return torch.Tensor(np.float32(out)).to(device)  # Returning the transformed output tensor
+
+# Define main function for execution
+def main(args):
+    data = args.data  # Get data path from command line arguments
+    num_epochs = args.num_epochs  # Get number of epochs from
+    # command line arguments
+    batch_size = args.batch_size  # Get batch size from command line arguments
+
+    # Load model and optimizer
+    model, optimizer = load_model()  # Call load_model function to load the model and optimizer
+    scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[15, 30, 40], gamma=0.5)  # Define learning rate scheduler
+    
+    best_model = model.state_dict()  # Initialize best model weights
+    best_loss = 1000000  # Initialize best loss variable
+
+    # Create dataset and data loaders
+    ds = DataSet(data, args.image_size, args.transforms)  # Create dataset object
+    p = int(0.7*len(ds))  # Calculate split index for training and validation data
+    valid, train = torch.utils.data.random_split(ds, [len(ds)-p, p], generator=torch.Generator().manual_seed(314))  # Split dataset into training and validation sets
+    train_loader = torch.utils.data.DataLoader(train, batch_size=batch_size, shuffle=True, num_workers=0)  # Create training data loader
+    valid_loader = torch.utils.data.DataLoader(valid, batch_size=batch_size, shuffle=True, num_workers=0)  # Create validation data loader
+
+    # Initialize meters for tracking training and validation metrics
+    train_meters = {name: utils.RunningAverageMeter(0.98) for name in (["train_loss", "train_psnr", "train_ssim"])}  # Initialize training meters
+    valid_meters = {name: utils.AverageMeter() for name in (["valid_psnr", "valid_ssim"])}  # Initialize validation meters
+
+    # Main training loop
+    for epoch in range(num_epochs):
+        for meter in train_meters.values():
+            meter.reset()  # Reset training meters for each epoch
+        
+        train_bar = utils.ProgressBar(train_loader, epoch)  # Create progress bar for training
+        loss_avg, psnr_avg, ssim_avg, count = 0, 0, 0, 0  # Initialize loss and metric variables
+        for batch_id, inputs in enumerate(train_bar):  # Iterate through training batches
+            model.train()  # Set model to training mode
+
+            frame = inputs[:,2].reshape((-1, 1, inputs.shape[-2], inputs.shape[-1])).to(device)  # Get frame data from inputs
+            inputs = inputs.to(device)  # Move inputs to device
+
+            outputs = model(inputs)  # Forward pass through the model
+            loss = F.mse_loss(outputs, frame) / batch_size  # Calculate MSE loss
+
+            model.zero_grad()  # Zero gradients
+            loss.backward()  # Backpropagation
+            optimizer.step()  # Optimizer step
+            train_psnr = utils.psnr(frame, outputs, False)  # Calculate PSNR
+            train_ssim = utils.ssim(frame, outputs, False)  # Calculate SSIM
+            train_meters["train_loss"].update(loss.item())  # Update training loss meter
+            train_meters["train_psnr"].update(train_psnr.item())  # Update training PSNR meter
+            train_meters["train_ssim"].update(train_ssim.item())  # Update training SSIM meter
+
+            loss_avg += loss.item()  # Accumulate loss for averaging
+            psnr_avg += train_psnr.item()  # Accumulate PSNR for averaging
+            ssim_avg += train_ssim.item()  # Accumulate SSIM for averaging
+            count += 1  # Increment count
+        
+            train_bar.log(dict(**train_meters, lr=optimizer.param_groups[0]["lr"]), verbose=True)  # Log training metrics
+        
+        scheduler.step()  # Step the learning rate scheduler
+
+        logging.info(train_bar.print(dict(**train_meters, lr=optimizer.param_groups[0]["lr"])))  # Log training progress
+
+        model.eval()  # Set model to evaluation mode
+        for meter in valid_meters.values():
+            meter.reset()  # Reset validation meters
+
+        valid_bar = utils.ProgressBar(valid_loader)  # Create progress bar for validation
+        
+        # Validation loop
+        for sample_id, sample in enumerate(valid_bar):  # Iterate through validation samples
+            with torch.no_grad():  # Disable gradient calculation
+                sample = sample.to(device)  # Move sample to device
+                frame = sample[:,2].reshape((-1, 1, inputs.shape[-2], inputs.shape[-1])).to(device)  # Get frame data from sample
+                outputs = model(sample)  # Forward pass through the model
+
+                valid_psnr = utils.psnr(frame, outputs, False)  # Calculate validation PSNR
+                valid_ssim = utils.ssim(frame, outputs, False)  # Calculate validation SSIM
+                valid_meters["valid_psnr"].update(valid_psnr.item())  # Update validation PSNR meter
+                valid_meters["valid_ssim"].update(valid_ssim.item())  # Update validation SSIM meter
+            
+                loss_avg += F.mse_loss(outputs, frame) / batch_size  # Accumulate loss for averaging
+                psnr_avg += valid_psnr.item()  # Accumulate PSNR for averaging
+                ssim_avg += valid_ssim.item()  # Accumulate SSIM for averaging
+                count += 1  # Increment count
+                
+        if loss_avg/count < best_loss:  # Check if current loss is better than the best loss
+            best_loss = loss_avg/count  # Update best loss
+            best_model = model.state_dict()  # Update best model weights
+    
+    # Denoise the video
+    ds = DataSet(data)  # Create dataset object for denoising
+    denoised = np.zeros_like(ds.img)  # Initialize array for denoised data
+    model.load_state_dict(best_model)  # Load best model weights for denoising
+    model.eval()  # Set model to evaluation mode for denoising
+
+    for k in range(len(ds)):  # Iterate through dataset for denoising
+        with torch.no_grad():  # Disable gradient calculation
+            o  = model(ds[k].unsqueeze(0))  # Pass input through the model to get denoised output
+            o = o.cpu().numpy()  # Move output to CPU and convert to numpy array
+            denoised[k] = o  # Store denoised output in the denoised array
+                    
+    with tifffile.TiffWriter(data[:-4]+'_udvd_mf' +'.tif') as stack:  # Create TIFF file for saving denoised data
+        stack.save(denoised)  # Save denoised data to TIFF file
+        
+    print('Denoised Prediction Saved at ', data[:-4]+'_udvd_mf' +'.tif')  # Print message indicating denoised data saved
+    
+    tensor_noisy = torch.Tensor(np.float32(ds.img)).unsqueeze(1)  # Convert noisy data to tensor
+    tensor_denoised = torch.Tensor(np.float32(denoised)).unsqueeze(1)  # Convert denoised data to tensor
+    uMSE, uPSNR = utils.uMSE_uPSNR(ds, model)  # Calculate uMSE and uPSNR
+
+    print('MSE: ', utils.mse(tensor_noisy, tensor_denoised))  # Print MSE
+    print('uMSE:', uMSE)  # Print uMSE
+    print('uPSNR:', uPSNR)  # Print uPSNR
+    print('PSNR: ', utils.psnr(tensor_noisy, tensor_denoised))  # Print PSNR
+    print('SSIM: ', utils.ssim(tensor_noisy, tensor_denoised))  # Print SSIM
+def get_args():
+    parser = argparse.ArgumentParser(allow_abbrev=False) 
+
+    # Add data arguments
+    parser.add_argument(
+        "--data",
+        default="data",
+        help="path to .tif file to be denoised")
+    parser.add_argument(
+        "--num-epochs",
+        default=50,
+        type=int,
+        help="epochs for the training")
+    parser.add_argument(
+        "--batch-size",
+        default=1,
+        type=int,
+        help="train batch size")
+    parser.add_argument(
+        "--image-size",
+        default=256,
+        type=int,
+        help="size of the patch")
+    parser.add_argument(
+        "--transforms",
+        dest='feature',
+        action='store_true')
+    parser.add_argument(
+        "--no-transforms",
+        dest='feature', 
+        action='store_false')
+    parser.set_defaults(transforms=True)
+
+    args, _ = parser.parse_known_args()
+    args = parser.parse_args()
+    return args
+
+if __name__ == "__main__":
+    args = get_args()  # Get command line arguments
+    main(args)  # Call the main function with the arguments
+
+
