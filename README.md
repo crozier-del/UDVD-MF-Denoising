@@ -2,7 +2,7 @@
 
 
 ## Introduction
- This set of code is a fully unsupervised framework, namely **unsupervised deep video denoiser (UDVD)**, to train denoising models using exclusively real noisy data collected from a transmission electron microscope (TEM). The framework enables recovery of atomic-resolution information from TEM data, improving the signal-to-noise ratio (SNR) by a factor of 40 at a spatial resolution of 1 Å and time resolution near 10 ms.
+ This set of code is a fully unsupervised framework, namely **unsupervised deep video denoiser (UDVD)**, to train denoising models using exclusively real noisy data collected from a transmission electron microscope (TEM). The framework enables recovery of atomic-resolution information from TEM data, potentially improving the signal-to-noise ratio (SNR) by more than an order of magnitude.
  
  Assuming the data has minimal correlated noise, the denoiser will take a TEM movie in `.tif` format collected from a direct electron detector and generate the denoised result as a `.npy` file, which can be further converted to other file formats. It is recommended to run this denoiser on high-performance computers (hpc).
 
