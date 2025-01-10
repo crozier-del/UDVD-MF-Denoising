@@ -36,6 +36,7 @@ The provided `PtCeO2_6.tif` video can be denoised by running the following comma
 ```shell
 python denoise_mf.py --data "./examples/PtCeO2_6.tif" 
 ```
+After the denoising process completed, the denoised result `PtCeO2_6_udvd_mf.npy` can be found in the same folder as the input file.
 
 ### Citation
 
