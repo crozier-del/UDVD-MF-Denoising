@@ -40,4 +40,12 @@ After the denoising process completed, the denoised result `PtCeO2_6_udvd_mf.npy
 
 ### Citation
 
-If you use this code, please cite our work: 10.1109/ICCV48922.2021.00178
+If you use this code, please cite our work: 
+
+Unsupervised Deep Video Denoising
+D. Y. Sheth, S. Mohan, J. L. Vincent, R. Manzorro, P. A. Crozier, M. M. Khapra, E. P. Simoncelli, C. Fernandez-Granda; Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV), 2021, pp. 1759-1768
+[https://arxiv.org/abs/2011.15045](https://arxiv.org/abs/2011.15045)
+
+Evaluating Unsupervised Denoising Requires Unsupervised Metrics 
+Adrià Marcos Morales, Matan Leibovich, Sreyas Mohan, Joshua L. Vincent, Piyush Haluai, Mai Tan, Peter A. Crozier, Carlos Fernandez-Granda; Proceedings of the 40th International Conference on Machine Learning (ICML), PMLR 2023 Vol. 202, pp. 23937-23957.
+[https://arxiv.org/abs/2210.05553](https://arxiv.org/abs/2210.05553)
