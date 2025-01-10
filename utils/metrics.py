@@ -68,8 +68,9 @@ def ssim(clean, noisy, normalized=True, raw=False):
 
     if raw:
         noisy = (np.uint16(noisy*(2**12-1-240)+240).astype(np.float32)-240)/(2**12-1-240)
-    
-    return np.array([structural_similarity(c, n, multichannel=True) for c, n in zip(clean, noisy)]).mean()
+    clean = np.squeeze(clean)
+    noisy = noisy.squeeze()
+    return np.array([structural_similarity(c, n, data_range=n.max() - n.min(), multichannel=True) for c, n in zip(clean, noisy)]).mean()
 
 
 def psnr(clean, noisy, normalized=True, raw=False):
