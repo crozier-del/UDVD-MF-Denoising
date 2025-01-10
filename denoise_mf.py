@@ -182,7 +182,7 @@ def main(args):
                 
 
         
-    print('Denoised Prediction Saved at ', data[:-4]+'_udvd_mf' +'.tif')
+    print('Denoised Prediction Saved at ', data[:-4]+'_udvd_mf' +'.npy')
     
     tensor_noisy = torch.Tensor(np.float32(ds.img)).unsqueeze(1)
     tensor_denoised = torch.Tensor(np.float32(denoised)).unsqueeze(1)
@@ -216,7 +216,7 @@ def get_args():
         help="train batch size")
     parser.add_argument(
         "--image-size",
-        default=64,
+        default=256,
         type=int,
         help="size of the patch")
     parser.add_argument(
