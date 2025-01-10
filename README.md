@@ -40,4 +40,4 @@ After the denoising process completed, the denoised result `PtCeO2_6_udvd_mf.npy
 
 ### Citation
 
-If you use this code, please cite our work: https://doi.org/10.48550/arXiv.2011.15045
+If you use this code, please cite our work: 10.1109/ICCV48922.2021.00178
