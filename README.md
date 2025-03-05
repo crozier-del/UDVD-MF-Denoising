@@ -31,12 +31,14 @@ python denoise_mf.py\
 
 ### Example
 
-The provided `PtCeO2_030303.tif` video can be denoised by running the following commands:
+The example files can be downloaded from [here](https://www.dropbox.com/scl/fo/usoouapl9jd8uarwi7fkv/AOusqUYN-FeN7K-q1MqoCa0?rlkey=9evnykpkiadwwu4m5vl92omf4&st=jya48zgs&dl=0). There are two files in the folder: `PtCeO2_030303.tif` is the raw data, and `PtCeO2_030303_udvd_mf.tif` is the denoised result converted to `.tif` format.
+
+To denoise the example data, run the following commands:
 
 ```shell
-python denoise_mf.py --data "./examples/PtCeO2_030303.tif" 
+python denoise_mf.py --data "PATH TO THE FILE/PtCeO2_030303.tif" 
 ```
-After the denoising process completed, the denoised result `PtCeO2_030303_udvd_mf.npy` can be found in the same folder as the input file.
+Replacing the `PATH TO THE FILE` with the actual directory to the raw video file location. After the denoising process completed, the denoised result `PtCeO2_030303_udvd_mf.npy` can be found in the same directory as the input file.
 
 ### Citation
 
