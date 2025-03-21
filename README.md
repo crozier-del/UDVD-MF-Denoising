@@ -11,11 +11,7 @@
 ```shell
 git clone https://github.com/crozier-del/UDVD-MF-Denoising
 cd UDVD-MF-Denoising
-
-#if mamba not installed
-conda install -c conda-forge mamba
-
-mamba env create -n denoise-HDR -f environment.yaml
+conda create -n denoise-HDR -f environment.yaml
 ```
 
 ### Running
