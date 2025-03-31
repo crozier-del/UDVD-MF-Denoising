@@ -1,6 +1,10 @@
 # Unsupervised Deep Video Denoiser for Transmission Electron Microscopy
 [![DOI](https://zenodo.org/badge/914030489.svg)](https://doi.org/10.5281/zenodo.14630448)
 
+## Updates
+### 2025.03.31
+- Fixed `environment.yaml` to ensure proper dependency installation and environment setup.
+
 ## Introduction
  This set of code is a fully unsupervised framework, namely **unsupervised deep video denoiser (UDVD)**, to train denoising models using exclusively real noisy data collected from a transmission electron microscope (TEM). The framework enables recovery of atomic-resolution information from TEM data, potentially improving the signal-to-noise ratio (SNR) by more than an order of magnitude.
  
