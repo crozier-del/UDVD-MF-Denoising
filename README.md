@@ -1,6 +1,10 @@
 # Unsupervised Deep Video Denoiser for Transmission Electron Microscopy
 [![DOI](https://zenodo.org/badge/914030489.svg)](https://doi.org/10.5281/zenodo.14630448)
 
+## Updates
+### 2025.03.31
+- Fixed `environment.yaml` to ensure proper dependency installation and environment setup.
+
 ## Introduction
  This set of code is a fully unsupervised framework, namely **unsupervised deep video denoiser (UDVD)**, to train denoising models using exclusively real noisy data collected from a transmission electron microscope (TEM). The framework enables recovery of atomic-resolution information from TEM data, potentially improving the signal-to-noise ratio (SNR) by more than an order of magnitude.
  
@@ -11,7 +15,7 @@
 ```shell
 git clone https://github.com/crozier-del/UDVD-MF-Denoising
 cd UDVD-MF-Denoising
-conda env create -n denoise-HDR -f environment.yaml
+conda create -n denoise-HDR -f environment.yaml
 ```
 
 ### Running
@@ -40,7 +44,7 @@ python denoise_mf.py --data "PATH TO THE FILE/PtCeO2_030303.tif"
 ```
 Replacing the `PATH TO THE FILE` with the actual directory to the raw video file location. After the denoising process completed, the denoised result `PtCeO2_030303_udvd_mf.npy` can be found in the same directory as the input file.
 
-### Citation
+## Citation
 
 If you use this code, please cite our work: 
 
@@ -51,3 +55,8 @@ D. Y. Sheth, S. Mohan, J. L. Vincent, R. Manzorro, P. A. Crozier, M. M. Khapra, 
 *Evaluating Unsupervised Denoising Requires Unsupervised Metrics*\
 A. Marcos Morales, M. Leibovich, S. Mohan, J. L. Vincent, P. Haluai, M. Tan, P. A. Crozier, C. Fernandez-Granda; **Proceedings of the 40th International Conference on Machine Learning (ICML)**, PMLR 2023 Vol. 202, pp. 23937-23957.\
 [https://arxiv.org/abs/2210.05553](https://arxiv.org/abs/2210.05553)
+
+## Support
+
+If you encounter any issues or have questions about the project, please contact us at [CROZIER@asu.edu](mailto:CROZIER@asu.edu) or [ywan1240@asu.edu](mailto:ywan1240@asu.edu).
+
