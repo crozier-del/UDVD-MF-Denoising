@@ -44,7 +44,7 @@ python denoise_mf.py --data "PATH TO THE FILE/PtCeO2_030303.tif"
 ```
 Replacing the `PATH TO THE FILE` with the actual directory to the raw video file location. After the denoising process completed, the denoised result `PtCeO2_030303_udvd_mf.npy` can be found in the same directory as the input file.
 
-### Citation
+## Citation
 
 If you use this code, please cite our work: 
 
@@ -55,3 +55,8 @@ D. Y. Sheth, S. Mohan, J. L. Vincent, R. Manzorro, P. A. Crozier, M. M. Khapra, 
 *Evaluating Unsupervised Denoising Requires Unsupervised Metrics*\
 A. Marcos Morales, M. Leibovich, S. Mohan, J. L. Vincent, P. Haluai, M. Tan, P. A. Crozier, C. Fernandez-Granda; **Proceedings of the 40th International Conference on Machine Learning (ICML)**, PMLR 2023 Vol. 202, pp. 23937-23957.\
 [https://arxiv.org/abs/2210.05553](https://arxiv.org/abs/2210.05553)
+
+## Support
+
+If you encounter any issues or have questions about the project, please contact us at [CROZIER@asu.edu](mailto:CROZIER@asu.edu) or [ywan1240@asu.edu](mailto:ywan1240@asu.edu).
+
