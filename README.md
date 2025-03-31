@@ -15,7 +15,7 @@
 ```shell
 git clone https://github.com/crozier-del/UDVD-MF-Denoising
 cd UDVD-MF-Denoising
-conda create -n denoise-HDR -f environment.yaml
+conda env create -n denoise-HDR -f environment.yaml
 ```
 
 ### Running
