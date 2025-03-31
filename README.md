@@ -2,13 +2,20 @@
 [![DOI](https://zenodo.org/badge/914030489.svg)](https://doi.org/10.5281/zenodo.14630448)
 
 ## Updates
+
+### 2025.04.xx
+- More input type: `.npy`
+- Support 4D dataset
+- Adjustments to the blindspot algorithm: now also blind neighboring pixel by default
+- More arguments
+
 ### 2025.03.31
 - Fixed `environment.yaml` to ensure proper dependency installation and environment setup.
 
 ## Introduction
  This set of code is a fully unsupervised framework, namely **unsupervised deep video denoiser (UDVD)**, to train denoising models using exclusively real noisy data collected from a transmission electron microscope (TEM). The framework enables recovery of atomic-resolution information from TEM data, potentially improving the signal-to-noise ratio (SNR) by more than an order of magnitude.
  
- Assuming the data has minimal correlated noise, the denoiser will take a TEM movie in `.tif` format collected from a direct electron detector and generate the denoised result as a `.npy` file, which can be further converted to other file formats. It is recommended to run this denoiser on high-performance computers (hpc).
+ Assuming the data has minimal correlated noise, the denoiser will take a TEM dataset in `.tif` or `.npy` format collected from a direct electron detector and generate the denoised result as a `.npy` file, which can be further converted to other file formats. It is recommended to run this denoiser on high-performance computers (hpc). Check with hpc staff if necessary changes to installation and running commands are needed.
 
 ## Usage
 ### Installation
@@ -21,28 +28,34 @@ conda env create -n denoise-HDR -f environment.yaml
 ### Running
 ```shell
 conda activate denoise-HDR
-python denoise_mf.py\
-     --data path_to_tiff_file  
-     --num-epochs 50
-     --batch-size 1
-     --image-size 256
+# all the arguments in [] are optional.
+python denoise_mf.py --data path_to_file \
+                    [--output-file path_to_output_file] [--save-model] 
+                    [--num-epochs 50] [--batch-size 1] [--image-size 256] [--fourdim] 
+                    [--include-neighbor] [--multiply 1]
 ```
 ### Arguments
-* `data` **(required)**: Full path to the `.tif` file containing the video to be denoised.
-* `num-epochs` Number of training epochs (default: 50).
-* `batch-size`: Number of images per batch for training (default: 1). Adjust based on available GPU memory.
-* `image-size`: Size of the square image patches used for training (default: 256).
+Some arguments needs parameters. Replace the `$parameter` with the actual parameters. 
+* **(required)**`--data $PATH_TO_FILE` : Full path to the `.tif` file containing the video to be denoised.
+* *(new)*`--output-file $PATH_TO_OUTPUT_FILE` : Full path of the output file without filename extension. It will save at the same location with an extension of `_udvd_mf` by defualt.
+* *(new)*`--fourdim` : Set if data is 4D.
+* *(new)*`--include-neighbor` : Set if not blinding neighbors.
+* *(new)*`--save-model` : Set if saving the model as a `.pth` file. The file name will be the same as the output file.
+* `--num-epochs $NUM` Number of training epochs (default: 50).
+* `--batch-size $NUM `: Number of images per batch for training (default: 1). Adjust based on available GPU memory.
+* `--image-size $NUM`: Size of the square image patches used for training (default: 256).
+* *(new)*`--multiply $NUM` : Multiply the data by an integer to manually normalize the data (default: 1).
 
-### Example
+### Examples
 
 The example files can be downloaded from [here](https://www.dropbox.com/scl/fo/usoouapl9jd8uarwi7fkv/AOusqUYN-FeN7K-q1MqoCa0?rlkey=9evnykpkiadwwu4m5vl92omf4&st=jya48zgs&dl=0). There are two files in the folder: `PtCeO2_030303.tif` is the raw data, and `PtCeO2_030303_udvd_mf.tif` is the denoised result converted to `.tif` format.
 
-To denoise the example data, run the following commands:
+To denoise the example data, run the following command:
 
 ```shell
 python denoise_mf.py --data "PATH TO THE FILE/PtCeO2_030303.tif" 
 ```
-Replacing the `PATH TO THE FILE` with the actual directory to the raw video file location. After the denoising process completed, the denoised result `PtCeO2_030303_udvd_mf.npy` can be found in the same directory as the input file.
+Replacing the `PATH TO THE FILE` with the actual directory to the raw video file location. This line will denoise the TEM movieAfter the denoising process completed, the denoised result `PtCeO2_030303_udvd_mf.npy` can be found in the same directory as the input file.
 
 ## Citation
 
