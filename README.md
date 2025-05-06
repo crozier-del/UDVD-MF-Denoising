@@ -3,7 +3,7 @@
 
 ## Updates
 
-### 2025.04.xx
+### 2025.05.05
 - More input type: `.npy`
 - Support 4D dataset
 - Adjustments to the blindspot algorithm: now also blind neighboring pixel by default
