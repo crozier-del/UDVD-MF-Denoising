@@ -13,11 +13,32 @@ class crop(nn.Module):
         x = x[0:N, 0:C, 0:H-1, 0:W]
         return x
 
+
 class shift(nn.Module):
     def __init__(self):
         super().__init__()
         self.shift_down = nn.ZeroPad2d((0,0,1,0))
         self.crop = crop()
+
+    def forward(self, x):
+        x = self.shift_down(x)
+        x = self.crop(x)
+        return x
+    
+class crop2(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x):
+        N, C, H, W = x.shape
+        x = x[0:N, 0:C, 0:H-2, 0:W]
+        return x
+
+class shift2(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.shift_down = nn.ZeroPad2d((0,0,2,0))
+        self.crop = crop2()
 
     def forward(self, x):
         x = self.shift_down(x)
@@ -273,7 +294,7 @@ class BlindVideoNetD1(nn.Module):
             diff = W - H
             x = x[:, :, (diff // 2):(diff // 2 + H), 0:W]
         return x, sigma
-
+      
 @register_model("blind-video-net-4")
 class BlindVideoNet(nn.Module):
     def __init__(self, channels_per_frame=3, out_channels=9, bias=False, blind=True, sigma_known=True):
@@ -338,6 +359,292 @@ class BlindVideoNet(nn.Module):
         x = F.leaky_relu_(self.nin_A(x), negative_slope=0.1)
         x = F.leaky_relu_(self.nin_B(x), negative_slope=0.1)
         x = self.nin_C(x)
+        
+        x = F.relu(x)
+
+        # Unsquare
+        if(H > W):
+            diff = H - W
+            x = x[:, :, 0:H, (diff // 2):(diff // 2 + W)]
+        elif(W > H):
+            diff = W - H
+            x = x[:, :, (diff // 2):(diff // 2 + H), 0:W]
+        return x
+
+@register_model("blind-video-net-4-4d")
+class BlindVideoNet4D(nn.Module):
+    def __init__(self, channels_per_frame=3, out_channels=9, bias=False, blind=True, sigma_known=True):
+        super().__init__()
+        self.c = channels_per_frame
+        self.out_channels = out_channels
+        self.blind = blind
+        self.sigma_known = sigma_known
+        self.rotate = rotate()
+        
+        # First stage denoiser for triplets of frames - maintained at 32 features per output
+        # But now processing 4 groups instead of 3, we reduce to 24 features per group to keep total at 96
+        self.denoiser_1 = Blind_UNet(n_channels=3*channels_per_frame, n_output=24, bias=bias, blind=blind)
+        
+        # Second stage denoiser with same input/output channels as original
+        self.denoiser_2 = Blind_UNet(n_channels=96, n_output=96, bias=bias, blind=blind)
+        
+        if not sigma_known:
+            # Sigma estimation network for 9 input frames
+            self.sigma_net = Blind_UNet(n_channels=9*channels_per_frame, n_output=1, bias=False, blind=False)
+            
+        if blind:
+            self.shift = shift()
+            
+        self.unrotate = unrotate()
+        self.nin_A = nn.Conv2d(384, 384, 1, bias=bias)
+        self.nin_B = nn.Conv2d(384, 96, 1, bias=bias)
+        self.nin_C = nn.Conv2d(96, out_channels, 1, bias=bias)
+
+    @staticmethod
+    def add_args(parser):
+        parser.add_argument("--channels", type=int, default=3, help="number of channels per frame")
+        parser.add_argument("--out-channels", type=int, default=9, help="number of output channels")
+        parser.add_argument("--bias", action='store_true', help="use residual bias")
+        parser.add_argument("--normal", action='store_true', help="not a blind network")
+        parser.add_argument("--blind-noise", action='store_true', help="noise sigma is not known")
+
+    @classmethod
+    def build_model(cls, args):
+        return cls(channels_per_frame=args.channels, out_channels=args.out_channels, bias=args.bias, blind=(not args.normal), sigma_known=(not args.blind_noise))
+
+    def forward(self, x):
+        # Square
+        N, C, H, W = x.shape
+        if not self.sigma_known:
+            sigma = self.sigma_net(x).mean(dim=(1,2,3))
+        else:
+            sigma = None
+
+        if(H > W):
+            diff = H - W
+            x = F.pad(x, [diff // 2, diff - diff // 2, 0, 0], mode = 'reflect')
+        elif(W > H):
+            diff = W - H
+            x = F.pad(x, [0, 0, diff // 2, diff - diff // 2], mode = 'reflect')
+
+        # Process four groups of frames in a 3x3 grid:
+        # 0 1 2
+        # 3 4 5
+        # 6 7 8
+        # Where 4 is the center frame
+        
+        # Group 1: Diagonal from top-left to bottom-right (0, 4, 8)
+        i1 = self.rotate(x[:, [0, 4, 8], :, :])
+        
+        # Group 2: Vertical line (1, 4, 7)
+        i2 = self.rotate(x[:, [1, 4, 7], :, :])
+        
+        # Group 3: Diagonal from top-right to bottom-left (2, 4, 6)
+        i3 = self.rotate(x[:, [2, 4, 6], :, :])
+        
+        # Group 4: Horizontal line (3, 4, 5)
+        i4 = self.rotate(x[:, [3, 4, 5], :, :])
+
+        # Process each group through the first denoiser
+        y1 = self.denoiser_1(i1)
+        y2 = self.denoiser_1(i2)
+        y3 = self.denoiser_1(i3)
+        y4 = self.denoiser_1(i4)
+
+        # Concatenate all outputs from the first stage
+        y = torch.cat((y1, y2, y3, y4), dim=1)
+        
+        # Process through the second denoiser
+        x = self.denoiser_2(y)
+
+        if self.blind:
+            x = self.shift(x)
+        x = self.unrotate(x)
+        x = F.leaky_relu_(self.nin_A(x), negative_slope=0.1)
+        x = F.leaky_relu_(self.nin_B(x), negative_slope=0.1)
+        x = self.nin_C(x)
+        
+        x = F.relu(x)
+
+        # Unsquare
+        if(H > W):
+            diff = H - W
+            x = x[:, :, 0:H, (diff // 2):(diff // 2 + W)]
+        elif(W > H):
+            diff = W - H
+            x = x[:, :, (diff // 2):(diff // 2 + H), 0:W]
+        return x
+
+@register_model("blind-video-net-5")
+class BlindVideoNet(nn.Module):
+    def __init__(self, channels_per_frame=3, out_channels=9, bias=False, blind=True, sigma_known=True):
+        super().__init__()
+        self.c = channels_per_frame
+        self.out_channels = out_channels
+        self.blind = blind
+        self.sigma_known = sigma_known
+        self.rotate = rotate()
+        self.denoiser_1 = Blind_UNet(n_channels=3*channels_per_frame, n_output=32, bias=bias, blind=blind)
+        self.denoiser_2 = Blind_UNet(n_channels=96, n_output=96, bias=bias, blind=blind)
+        if not sigma_known:
+            self.sigma_net = Blind_UNet(n_channels=5*channels_per_frame, n_output=1, bias=False, blind=False)
+        if blind:
+            self.shift = shift2()
+        self.unrotate = unrotate()
+        self.nin_A = nn.Conv2d(384, 384, 1, bias=bias)
+        self.nin_B = nn.Conv2d(384, 96, 1, bias=bias)
+        self.nin_C = nn.Conv2d(96, out_channels, 1, bias=bias)
+
+    @staticmethod
+    def add_args(parser):
+        parser.add_argument("--channels", type=int, default=3, help="number of channels per frame")
+        parser.add_argument("--out-channels", type=int, default=9, help="number of output channels")
+        parser.add_argument("--bias", action='store_true', help="use residual bias")
+        parser.add_argument("--normal", action='store_true', help="not a blind network")
+        parser.add_argument("--blind-noise", action='store_true', help="noise sigma is not known")
+
+    @classmethod
+    def build_model(cls, args):
+        return cls(channels_per_frame=args.channels, out_channels=args.out_channels, bias=args.bias, blind=(not args.normal), sigma_known=(not args.blind_noise))
+
+    def forward(self, x):
+        # Square
+        N, C, H, W = x.shape
+        if not self.sigma_known:
+            sigma = self.sigma_net(x).mean(dim=(1,2,3))
+        else:
+            sigma = None
+
+        if(H > W):
+            diff = H - W
+            x = F.pad(x, [diff // 2, diff - diff // 2, 0, 0], mode = 'reflect')
+        elif(W > H):
+            diff = W - H
+            x = F.pad(x, [0, 0, diff // 2, diff - diff // 2], mode = 'reflect')
+
+        i1 = self.rotate(x[:, 0:(3*self.c), :, :])
+        i2 = self.rotate(x[:, self.c:(4*self.c), :, :])
+        i3 = self.rotate(x[:, (2*self.c):(5*self.c), :, :])
+
+        y1 = self.denoiser_1(i1)
+        y2 = self.denoiser_1(i2)
+        y3 = self.denoiser_1(i3)
+
+        y = torch.cat((y1, y2, y3), dim=1)
+        x = self.denoiser_2(y)
+
+        if self.blind:
+            x = self.shift(x)
+        x = self.unrotate(x)
+        x = F.leaky_relu_(self.nin_A(x), negative_slope=0.1)
+        x = F.leaky_relu_(self.nin_B(x), negative_slope=0.1)
+        x = self.nin_C(x)
+        
+        x = F.relu(x)
+
+        # Unsquare
+        if(H > W):
+            diff = H - W
+            x = x[:, :, 0:H, (diff // 2):(diff // 2 + W)]
+        elif(W > H):
+            diff = W - H
+            x = x[:, :, (diff // 2):(diff // 2 + H), 0:W]
+        return x
+    
+@register_model("blind-video-net-5-4d")
+class BlindVideoNet4D(nn.Module):
+    def __init__(self, channels_per_frame=3, out_channels=9, bias=False, blind=True, sigma_known=True):
+        super().__init__()
+        self.c = channels_per_frame
+        self.out_channels = out_channels
+        self.blind = blind
+        self.sigma_known = sigma_known
+        self.rotate = rotate()
+        
+        # First stage denoiser for triplets of frames - maintained at 32 features per output
+        # But now processing 4 groups instead of 3, we reduce to 24 features per group to keep total at 96
+        self.denoiser_1 = Blind_UNet(n_channels=3*channels_per_frame, n_output=24, bias=bias, blind=blind)
+        
+        # Second stage denoiser with same input/output channels as original
+        self.denoiser_2 = Blind_UNet(n_channels=96, n_output=96, bias=bias, blind=blind)
+        
+        if not sigma_known:
+            # Sigma estimation network for 9 input frames
+            self.sigma_net = Blind_UNet(n_channels=9*channels_per_frame, n_output=1, bias=False, blind=False)
+            
+        if blind:
+            self.shift = shift2()
+            
+        self.unrotate = unrotate()
+        self.nin_A = nn.Conv2d(384, 384, 1, bias=bias)
+        self.nin_B = nn.Conv2d(384, 96, 1, bias=bias)
+        self.nin_C = nn.Conv2d(96, out_channels, 1, bias=bias)
+
+    @staticmethod
+    def add_args(parser):
+        parser.add_argument("--channels", type=int, default=3, help="number of channels per frame")
+        parser.add_argument("--out-channels", type=int, default=9, help="number of output channels")
+        parser.add_argument("--bias", action='store_true', help="use residual bias")
+        parser.add_argument("--normal", action='store_true', help="not a blind network")
+        parser.add_argument("--blind-noise", action='store_true', help="noise sigma is not known")
+
+    @classmethod
+    def build_model(cls, args):
+        return cls(channels_per_frame=args.channels, out_channels=args.out_channels, bias=args.bias, blind=(not args.normal), sigma_known=(not args.blind_noise))
+
+    def forward(self, x):
+        # Square
+        N, C, H, W = x.shape
+        if not self.sigma_known:
+            sigma = self.sigma_net(x).mean(dim=(1,2,3))
+        else:
+            sigma = None
+
+        if(H > W):
+            diff = H - W
+            x = F.pad(x, [diff // 2, diff - diff // 2, 0, 0], mode = 'reflect')
+        elif(W > H):
+            diff = W - H
+            x = F.pad(x, [0, 0, diff // 2, diff - diff // 2], mode = 'reflect')
+
+        # Process four groups of frames in a 3x3 grid:
+        # 0 1 2
+        # 3 4 5
+        # 6 7 8
+        # Where 4 is the center frame
+        
+        # Group 1: Diagonal from top-left to bottom-right (0, 4, 8)
+        i1 = self.rotate(x[:, [0, 4, 8], :, :])
+        
+        # Group 2: Vertical line (1, 4, 7)
+        i2 = self.rotate(x[:, [1, 4, 7], :, :])
+        
+        # Group 3: Diagonal from top-right to bottom-left (2, 4, 6)
+        i3 = self.rotate(x[:, [2, 4, 6], :, :])
+        
+        # Group 4: Horizontal line (3, 4, 5)
+        i4 = self.rotate(x[:, [3, 4, 5], :, :])
+
+        # Process each group through the first denoiser
+        y1 = self.denoiser_1(i1)
+        y2 = self.denoiser_1(i2)
+        y3 = self.denoiser_1(i3)
+        y4 = self.denoiser_1(i4)
+
+        # Concatenate all outputs from the first stage
+        y = torch.cat((y1, y2, y3, y4), dim=1)
+        
+        # Process through the second denoiser
+        x = self.denoiser_2(y)
+
+        if self.blind:
+            x = self.shift(x)
+        x = self.unrotate(x)
+        x = F.leaky_relu_(self.nin_A(x), negative_slope=0.1)
+        x = F.leaky_relu_(self.nin_B(x), negative_slope=0.1)
+        x = self.nin_C(x)
+        
+        x = F.relu(x)
 
         # Unsquare
         if(H > W):
