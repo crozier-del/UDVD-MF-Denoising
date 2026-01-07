@@ -3,7 +3,7 @@ channels:
   - pytorch
   - nvidia
   - conda-forge
-  - defaults
+
 dependencies:
   # Core Python and PyTorch
   - python=3.11.5
@@ -22,12 +22,12 @@ dependencies:
   - sympy=1.12
   
   # Data visualization
-  - matplotlib=3.8.0
+  - matplotlib
   - seaborn=0.12.2
   - plotly=5.17.0
   
   # Data processing
-  - pyarrow=13.0.0
+  - pyarrow
   - openpyxl=3.1.2
   - xlrd=2.0.1
   - feather-format=0.4.1
@@ -48,12 +48,12 @@ dependencies:
   - tqdm=4.66.1
   
   # Image processing and additional libraries
-  - pillow=9.4.0
+  - pillow
   - pip:
-    - opencv-python==4.9.0.80
+    - opencv-python==4.9.*
     - h5py==3.10.0
     - scikit-image==0.22.0
-    - imageio==2.33.1
-    - tifffile==2024.1.30
-    - imagecodecs==2024.1.1
-    - lazy-loader==0.3
+    - imageio
+    - tifffile
+    - imagecodecs
+    - lazy-loader

@@ -3,6 +3,9 @@
 
 ## Updates
 
+### 2026.01.07
+- Dependecies modified in `environment.yaml` for better installation compatibility.
+
 ### 2025.05.05
 - More input type: `.npy`
 - Support 4D dataset
@@ -45,17 +48,34 @@ Some arguments needs parameters. Replace the `$parameter` with the actual parame
 * `--batch-size $NUM `: Number of images per batch for training (default: 1). Adjust based on available GPU memory.
 * `--image-size $NUM`: Size of the square image patches used for training (default: 256).
 * *(new)*`--multiply $NUM` : Multiply the data by an integer to manually normalize the data (default: 1).
+  
+### Data Preparation
+
+The current version of the code supports input files in `.tif` (or `.tiff`) and `.npy` formats. Since the neural network internally operates on NumPy arrays, it is **recommended** to convert your input data into `.npy` format before running the model.
+
+When preparing your data, please ensure that the **dimension order** matches the expected format. **The last two dimensions should always correspond to the *frame* (i.e., the 2D image or spectrum).**  
+
+|      Data Type      |       Data Dimension      | Sequence Dimension | Frame Dimension |
+|:-------------------:|:-------------------------:|:------------------:|:---------------:|
+|      TEM Movie      |      $3D, (t, x, y)$      |         $t$        |     $(x, y)$    |
+|   Time-Series EELS  |   $3D, (t, \Delta E, q)$  |         $t$        | $(\Delta E, q)$ |
+|    EELS Line-Scan   |   $3D, (x, \Delta E, q)$  |         $x$        | $(\Delta E, q)$ |
+|  EEL Spectrum Image | $4D, (x, y, \Delta E, q)$ |       $(x,y)$      | $(\Delta E, q)$ |
+
+To avoid dependency and compatibility issues with specialized file formats (e.g., `.dm4`, `.hdf5`, etc.), this repository does **not** include conversion utilities.
+
+If you encounter difficulties converting your data into the correct format, please feel free to contact us for assistance.
 
 ### Examples
 
 The example files can be downloaded from [here](https://www.dropbox.com/scl/fo/usoouapl9jd8uarwi7fkv/AOusqUYN-FeN7K-q1MqoCa0?rlkey=9evnykpkiadwwu4m5vl92omf4&st=jya48zgs&dl=0). There are two files in the folder: `PtCeO2_030303.tif` is the raw data, and `PtCeO2_030303_udvd_mf.tif` is the denoised result converted to `.tif` format.
 
-To denoise the example data, run the following command:
+To preproduce the denoised result, run the following command:
 
 ```shell
-python denoise_mf.py --data "PATH TO THE FILE/PtCeO2_030303.tif" 
+python denoise_mf.py --data "PATH TO THE FILE/PtCeO2_030303.tif --include-neighbor" 
 ```
-Replacing the `PATH TO THE FILE` with the actual directory to the raw video file location. This line will denoise the TEM movieAfter the denoising process completed, the denoised result `PtCeO2_030303_udvd_mf.npy` can be found in the same directory as the input file.
+Replacing the `PATH TO THE FILE` with the actual directory to the raw video file location. This line will denoise the TEM movie. After the denoising process completed, the denoised result `PtCeO2_030303_udvd_mf.npy` can be found in the same directory as the input file. 
 
 ## Citation
 
@@ -68,6 +88,14 @@ D. Y. Sheth, S. Mohan, J. L. Vincent, R. Manzorro, P. A. Crozier, M. M. Khapra, 
 *Evaluating Unsupervised Denoising Requires Unsupervised Metrics*\
 A. Marcos Morales, M. Leibovich, S. Mohan, J. L. Vincent, P. Haluai, M. Tan, P. A. Crozier, C. Fernandez-Granda; **Proceedings of the 40th International Conference on Machine Learning (ICML)**, PMLR 2023 Vol. 202, pp. 23937-23957.\
 [https://arxiv.org/abs/2210.05553](https://arxiv.org/abs/2210.05553)
+
+*Visualizing Nanoparticle Surface Dynamics and Instabilities Enabled by Deep Denoising*\
+P. A. Crozier, M. Leibovich, P. Haluai, M. Tan, A. M. Thomas, J. Vincent, S. Mohan, A. Marcos Morales, S. A. Kulkarni, D. S. Matteson, Y. Wang, C. Fernandez-Granda; **Science**, 2025, 387, 949-954.\
+[https://doi.org/10.1126/science.ads2688](https://doi.org/10.1126/science.ads2688)
+
+*Revealing Information from Weak Signals in Electron Energy-Loss Spectroscopy with a Deep Denoiser*\
+Y. Wang, M. Tan, C. Fernandez-Granda, P. A. Crozier; **Micron**, 2026, 201, 103957.\
+[https://doi.org/10.1016/j.micron.2025.103957](https://doi.org/10.1016/j.micron.2025.103957)
 
 ## Support
 
